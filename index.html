@@ -643,6 +643,45 @@ a { color: inherit; text-decoration: none; }
   html { scroll-behavior: auto; }
 }
 
+/* ============================================================
+   HOME EXTRAS — momentum, tale of the tape, up-for-grabs
+   ============================================================ */
+.spark-card { margin-top: 16px; }
+.spark-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.spark-head .now { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.06em; }
+.spark-svg { width: 100%; height: 60px; display: block; }
+.spark-zero { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.spark-ends { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+
+.tape { margin-top: 16px; padding: 10px 6px 12px; }
+.tape h2 { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.06em; text-align: center; margin: 4px 0 8px; }
+.tape-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 9px 6px; border-top: 1px solid var(--border); }
+.tape-row:first-of-type { border-top: none; }
+.tape-v { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.04em; line-height: 1; }
+.tape-v.james { text-align: right; color: #9FC3F0; }
+.tape-v.fran  { text-align: left;  color: #F5A3A6; }
+.tape-v.win.james { color: #fff; text-shadow: 0 0 10px rgba(0, 63, 135, 0.85); }
+.tape-v.win.fran  { color: #fff; text-shadow: 0 0 10px rgba(207, 14, 20, 0.85); }
+.tape-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); text-align: center; min-width: 78px; }
+.tape-best { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.tape-best > div { padding: 8px 10px; border-radius: 8px; background: var(--bg-elevated); }
+.tape-best .bw-val { font-size: 12px; font-weight: 600; margin-top: 3px; line-height: 1.3; }
+
+.stake-list { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.stake-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 9px 10px 7px; border-radius: 8px; background: var(--bg-elevated); font-size: 12px; font-weight: 600; }
+.stake-row .srvs { font-size: 10px; color: var(--text-muted); }
+.stake-row .sr-team { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.stake-row .sr-team.away { justify-content: flex-end; text-align: right; }
+.stake-row .sr-team .tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stake-meta { grid-column: 1 / -1; text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 5px; }
+
+.owner-stats { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: rgba(255, 255, 255, 0.82); }
+.owner-stats b { font-family: var(--font-display); font-size: 16px; letter-spacing: 0.04em; color: #fff; }
+.contrib { height: 4px; border-radius: 2px; background: var(--bg-elevated); overflow: hidden; margin-top: 1px; }
+.contrib > span { display: block; height: 100%; border-radius: 2px; }
+.james-card .contrib > span { background: var(--james-primary); }
+.fran-card .contrib > span { background: var(--fran-primary); }
+
 /* nav items have no href in the single-file build — keep them tappable-looking */
 [data-link]{cursor:pointer;-webkit-tap-highlight-color:transparent;}
 </style>
@@ -2563,6 +2602,134 @@ const RESULTS = [
     return '';
   }
 
+  // ---- Derived stats (read-only; never touches the scoring engine) ----
+  function ownerStats(scores) {
+    const s = {
+      james: { alive: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, best: null },
+      fran:  { alive: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, best: null },
+    };
+    TEAMS.forEach((t) => {
+      const bd = scores.breakdown[t.name];
+      const o = s[t.owner];
+      if (!bd.eliminated) o.alive += 1;
+      o.w += bd.w; o.d += bd.d; o.l += bd.l;
+    });
+    (state.matches || [])
+      .filter((m) => m.status === 'FINISHED' && canonStage(m.stage) === 'GROUP_STAGE')
+      .forEach((m) => {
+        const h = findTeam(m.homeTeam), a = findTeam(m.awayTeam);
+        const ft = m.score && m.score.fullTime;
+        if (!ft || ft.home == null) return;
+        if (h) { s[h.owner].gf += ft.home; s[h.owner].ga += ft.away; }
+        if (a) { s[a.owner].gf += ft.away; s[a.owner].ga += ft.home; }
+        if (m.score.winner === 'HOME_TEAM' && h) {
+          const o = s[h.owner], marg = ft.home - ft.away;
+          if (!o.best || marg > o.best.marg) o.best = { marg, team: h, gf: ft.home, ga: ft.away, opp: a || m.awayTeam };
+        } else if (m.score.winner === 'AWAY_TEAM' && a) {
+          const o = s[a.owner], marg = ft.away - ft.home;
+          if (!o.best || marg > o.best.marg) o.best = { marg, team: a, gf: ft.away, ga: ft.home, opp: h || m.homeTeam };
+        }
+      });
+    return s;
+  }
+
+  function fmtShort(dk) {
+    return new Date(dk).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+  }
+
+  // Exact lead history: re-run the verified engine on matches up to each date.
+  function leadTimeline() {
+    const finished = (state.matches || []).filter((m) => m.status === 'FINISHED');
+    const days = [...new Set(finished.map((m) => dayKey(m.utcDate)))].sort();
+    return days.map((d) => {
+      const subset = finished.filter((m) => dayKey(m.utcDate) <= d);
+      const sc = calculateScores(subset, TEAMS);
+      return { d, james: sc.james, fran: sc.fran, margin: sc.james - sc.fran };
+    });
+  }
+
+  function renderMomentum(scores) {
+    const tl = leadTimeline();
+    if (tl.length < 2) return '';
+    const W = 320, H = 56, pad = 5;
+    const maxAbs = Math.max(4, ...tl.map((p) => Math.abs(p.margin)));
+    const x = (i) => pad + (W - 2 * pad) * (i / (tl.length - 1));
+    const y = (m) => H / 2 - (m / maxAbs) * (H / 2 - pad);
+    const pts = tl.map((p, i) => `${x(i).toFixed(1)},${y(p.margin).toFixed(1)}`).join(' ');
+    const last = tl[tl.length - 1];
+    const who = last.margin > 0 ? 'james' : last.margin < 0 ? 'fran' : null;
+    const stroke = who === 'james' ? '#3C82DC' : who === 'fran' ? '#E63C41' : '#C8A84B';
+    const lx = x(tl.length - 1).toFixed(1), ly = y(last.margin).toFixed(1);
+    return `<div class="card spark-card reveal">
+      <div class="spark-head">
+        <span class="label">Lead over time</span>
+        <span class="now" style="color:${stroke}">${who ? OWNERS[who].name + ' +' + Math.abs(last.margin) : 'Level'}</span>
+      </div>
+      <svg class="spark-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <line class="spark-zero" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>
+        <polyline fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/>
+        <circle cx="${lx}" cy="${ly}" r="3.5" fill="${stroke}"/>
+      </svg>
+      <div class="spark-ends"><span>${fmtShort(tl[0].d)}</span><span>James ▲ · Fran ▼</span><span>${fmtShort(last.d)}</span></div>
+    </div>`;
+  }
+
+  function renderTape(scores) {
+    const s = ownerStats(scores);
+    const j = s.james, f = s.fran;
+    const jgd = j.gf - j.ga, fgd = f.gf - f.ga;
+    const sign = (n) => (n > 0 ? '+' + n : '' + n);
+    const row = (label, jv, fv, jwin, fwin) => `<div class="tape-row">
+      <div class="tape-v james ${jwin ? 'win' : ''}">${jv}</div>
+      <div class="tape-label">${label}</div>
+      <div class="tape-v fran ${fwin ? 'win' : ''}">${fv}</div>
+    </div>`;
+    const best = (o, side) => {
+      if (!o.best) return `<div><span class="label">${OWNERS[side].name}'s biggest win</span><div class="bw-val">—</div></div>`;
+      const oppName = o.best.opp.name || o.best.opp.shortName || 'opponent';
+      const oppFlag = o.best.opp.flagEmoji || '';
+      return `<div><span class="label" style="color:var(--${side}-primary)">${OWNERS[side].name}'s biggest win</span>
+        <div class="bw-val">${o.best.team.flagEmoji} ${esc(o.best.team.name)} ${o.best.gf}–${o.best.ga} ${oppFlag} ${esc(oppName)}</div></div>`;
+    };
+    return `<div class="card tape reveal" id="more">
+      <h2>Tale of the tape</h2>
+      ${row('Teams alive', j.alive + '/24', f.alive + '/24', j.alive > f.alive, f.alive > j.alive)}
+      ${row('Group W–D–L', `${j.w}–${j.d}–${j.l}`, `${f.w}–${f.d}–${f.l}`, j.w > f.w, f.w > j.w)}
+      ${row('Goals for', j.gf, f.gf, j.gf > f.gf, f.gf > j.gf)}
+      ${row('Goal diff', sign(jgd), sign(fgd), jgd > fgd, fgd > jgd)}
+      <div class="tape-best">${best(j, 'james')}${best(f, 'fran')}</div>
+    </div>`;
+  }
+
+  function renderUpForGrabs() {
+    const upcoming = (state.matches || []).filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED');
+    if (!upcoming.length) return '';
+    let jc = 0, fc = 0;
+    const duals = [];
+    upcoming.forEach((m) => {
+      const h = findTeam(m.homeTeam), a = findTeam(m.awayTeam);
+      if ((h && h.owner === 'james') || (a && a.owner === 'james')) jc += 1;
+      if ((h && h.owner === 'fran') || (a && a.owner === 'fran')) fc += 1;
+      if (h && a && h.owner !== a.owner) duals.push({ m, h, a });
+    });
+    duals.sort((x, y) => new Date(x.m.utcDate) - new Date(y.m.utcDate));
+    const lastDate = upcoming.map((m) => m.utcDate).sort().slice(-1)[0];
+    const dualHTML = duals.slice(0, 6).map((d) => `<div class="stake-row">
+      <div class="sr-team"><span class="owner-dot ${d.h.owner}"></span><span class="flag">${d.h.flagEmoji}</span><span class="tn">${esc(d.h.name)}</span></div>
+      <div class="srvs">vs</div>
+      <div class="sr-team away"><span class="tn">${esc(d.a.name)}</span><span class="flag">${d.a.flagEmoji}</span><span class="owner-dot ${d.a.owner}"></span></div>
+      <div class="stake-meta">${fmtDateHeading(d.m.utcDate).split(',')[0]} · ${fmtTime(d.m.utcDate, 'Europe/London')} BST · ${esc((d.m.group || '').replace('GROUP_', 'Group '))}</div>
+    </div>`).join('');
+    return `<h2 class="section-title">Still up for grabs</h2>
+      <div class="card reveal">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:${duals.length ? '12px' : '0'}">
+          ${jc + fc} games left to play${lastDate ? `, group stage finishes ${fmtShort(dayKey(lastDate))}` : ''}.
+          <strong style="color:#9FC3F0">${jc}</strong> involve a James team · <strong style="color:#F5A3A6">${fc}</strong> involve a Fran team.
+        </p>
+        ${duals.length ? `<span class="label">Head-to-head — you both have a team on the line</span><div class="stake-list">${dualHTML}</div>` : ''}
+      </div>`;
+  }
+
   // ---- HOME ----
   function renderHome(scores) {
     const { james, fran } = scores;
@@ -2620,15 +2787,18 @@ const RESULTS = [
         ${banner}
         ${countdownHTML}
         ${stamp}
-        ${recent.length ? `<button class="scroll-arrow" id="scroll-down" aria-label="Scroll to recent results">▼</button>` : ''}
+        ${recent.length ? `<button class="scroll-arrow" id="scroll-down" aria-label="Scroll down for more">▼</button>` : ''}
       </div>
+      ${renderMomentum(scores)}
+      ${renderTape(scores)}
+      ${renderUpForGrabs()}
       ${recentHTML}`;
   }
 
   function bindHome() {
     const btn = document.getElementById('scroll-down');
     if (btn) btn.addEventListener('click', () => {
-      const t = document.getElementById('recent');
+      const t = document.getElementById('more') || document.getElementById('recent');
       if (t) t.scrollIntoView({ behavior: 'smooth' });
     });
 
@@ -2751,6 +2921,8 @@ const RESULTS = [
     const teams = TEAMS.filter((t) => t.owner === owner)
       .sort((a, b) => scores.breakdown[b.name].points - scores.breakdown[a.name].points || a.fifaRank - b.fifaRank);
     const total = scores[owner];
+    const os = ownerStats(scores)[owner];
+    const maxPts = Math.max(1, ...teams.map((t) => scores.breakdown[t.name].points));
 
     const cards = teams.map((t) => {
       const bd = scores.breakdown[t.name];
@@ -2760,12 +2932,14 @@ const RESULTS = [
         : next
           ? `<span class="tc-next">Next: vs ${esc(next.oppName)}<br>${fmtDateHeading(next.utcDate).split(',')[0]} ${fmtTime(next.utcDate, 'Europe/London')} BST</span>`
           : `<span class="tc-next">No fixture scheduled</span>`;
+      const pct = Math.max(0, Math.round(bd.points / maxPts * 100));
       return `<div class="team-card ${owner}-card ${bd.eliminated ? 'eliminated' : ''} reveal">
         <div class="tc-head"><span class="flag">${t.flagEmoji}</span>
           <div><div class="tc-name">${esc(t.name)}</div>
           <div class="tc-record">${bd.w}W ${bd.d}D ${bd.l}L · Rank ${t.fifaRank}</div></div>
         </div>
         <div class="tc-points">${bd.points} <span class="label">pts</span></div>
+        <div class="contrib"><span style="width:${pct}%"></span></div>
         ${nextLine}
       </div>`;
     }).join('');
@@ -2774,6 +2948,11 @@ const RESULTS = [
       <div class="owner-header ${owner}">
         <h1>${OWNERS[owner].name.toUpperCase()}</h1>
         <div class="owner-total">${total} PTS · ${teams.length} TEAMS</div>
+        <div class="owner-stats">
+          <span><b>${os.alive}</b>/24 alive</span>
+          <span><b>${os.w}–${os.d}–${os.l}</b> W-D-L</span>
+          <span><b>${os.gf}</b> goals for</span>
+        </div>
       </div>
       <div class="team-grid">${cards}</div>`;
   }
