@@ -682,6 +682,33 @@ a { color: inherit; text-decoration: none; }
 .james-card .contrib > span { background: var(--james-primary); }
 .fran-card .contrib > span { background: var(--fran-primary); }
 
+/* ============================================================
+   BRACKET PROJECTION + QUALIFYING VIEW
+   ============================================================ */
+.proj-banner { border-color: var(--james-gold); }
+.proj-banner .display { font-size: 20px; color: var(--james-gold); }
+.proj-banner p { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+
+.ql-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ql-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 7px 4px; border-top: 1px solid var(--border); }
+.ql-row:first-child { border-top: none; }
+.ql-g { font-family: var(--font-display); font-size: 16px; width: 18px; color: var(--text-muted); flex-shrink: 0; }
+.ql { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.ql em { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.ql.in em { color: #4ADE80; }
+.ql.out { opacity: 0.5; }
+.ql.out em { color: var(--fran-primary); }
+
+.tq-table td.tcol { max-width: 150px; }
+.tq-g { font-size: 9px; font-weight: 700; color: var(--text-muted); margin-left: 2px; }
+.tq-table tr.tq-out { opacity: 0.45; }
+.tq-table tr.tq-in td { border-top-color: rgba(74, 222, 128, 0.25); }
+.tq-badge { font-size: 8px; font-weight: 700; letter-spacing: 0.1em; color: #0A0E1A; background: #4ADE80; padding: 2px 5px; border-radius: 4px; }
+.tq-cut td { border-top: 2px solid var(--james-gold) !important; }
+
+.bk-match.proj .bk-slot { padding: 8px 8px; }
+.bk-seed { font-size: 8px; font-weight: 700; letter-spacing: 0.04em; color: var(--text-muted); width: 26px; flex-shrink: 0; }
+
 /* nav items have no href in the single-file build — keep them tappable-looking */
 [data-link]{cursor:pointer;-webkit-tap-highlight-color:transparent;}
 </style>
@@ -2579,10 +2606,13 @@ const RESULTS = [
 
   function apiNotice() {
     if (state.usingSnapshot) {
+      const fin = (state.matches || []).filter((m) => m.status === 'FINISHED');
+      const last = fin.map((m) => m.utcDate).sort().slice(-1)[0];
+      const sched = (state.matches || []).filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED').length;
       return `<div class="card" style="border-color:var(--james-gold);padding:12px 14px">
-        <span class="label" style="color:var(--james-gold)">Results to 24 June 2026</span>
+        <span class="label" style="color:var(--james-gold)">Results to ${last ? fmtShort(last) + ' 2026' : 'date'}</span>
         <p style="font-size:13px;margin-top:4px;color:var(--text-muted)">
-        Group stage so far. Matchday 3 (25–27 June) still to play — scores refresh when James updates.</p>
+        ${sched ? `${sched} match${sched === 1 ? '' : 'es'} still to play` : 'Group stage complete'} — scores refresh when James updates.</p>
       </div>`;
     }
     if (state.apiKeyMissing) {
@@ -3062,6 +3092,127 @@ const RESULTS = [
     </tr>`;
   }
 
+  // ---- BRACKET PROJECTION ----
+  // Official WC2026 Round-of-32 slot template (12 winners, 12 runners-up,
+  // 8 best third-placed teams). 'W'=group winner, 'R'=runner-up,
+  // 'T'=third-placed from one of the listed groups (id = which third slot).
+  const R32_TEMPLATE = [
+    { a: { t: 'W', g: 'E' }, b: { t: 'T', id: 0, groups: ['A', 'B', 'C', 'D', 'F'] } },
+    { a: { t: 'W', g: 'I' }, b: { t: 'T', id: 1, groups: ['C', 'D', 'F', 'G', 'H'] } },
+    { a: { t: 'R', g: 'A' }, b: { t: 'R', g: 'B' } },
+    { a: { t: 'W', g: 'F' }, b: { t: 'R', g: 'C' } },
+    { a: { t: 'R', g: 'K' }, b: { t: 'R', g: 'L' } },
+    { a: { t: 'W', g: 'H' }, b: { t: 'R', g: 'J' } },
+    { a: { t: 'W', g: 'D' }, b: { t: 'T', id: 2, groups: ['B', 'E', 'F', 'I', 'J'] } },
+    { a: { t: 'W', g: 'G' }, b: { t: 'T', id: 3, groups: ['A', 'E', 'H', 'I', 'J'] } },
+    { a: { t: 'W', g: 'C' }, b: { t: 'R', g: 'F' } },
+    { a: { t: 'R', g: 'E' }, b: { t: 'R', g: 'I' } },
+    { a: { t: 'W', g: 'A' }, b: { t: 'T', id: 4, groups: ['C', 'E', 'F', 'H', 'I'] } },
+    { a: { t: 'W', g: 'L' }, b: { t: 'T', id: 5, groups: ['E', 'H', 'I', 'J', 'K'] } },
+    { a: { t: 'W', g: 'J' }, b: { t: 'R', g: 'H' } },
+    { a: { t: 'R', g: 'D' }, b: { t: 'R', g: 'G' } },
+    { a: { t: 'W', g: 'B' }, b: { t: 'T', id: 6, groups: ['E', 'F', 'G', 'I', 'J'] } },
+    { a: { t: 'W', g: 'K' }, b: { t: 'T', id: 7, groups: ['D', 'E', 'I', 'J', 'L'] } },
+  ];
+  const THIRD_SLOTS = R32_TEMPLATE.flatMap((m) => [m.a, m.b]).filter((s) => s.t === 'T');
+
+  // Bipartite match: each third slot gets a distinct qualifying group from its
+  // allowed set. (FIFA's Annex C picks one specific valid matching of the 495;
+  // this finds a valid one — provisional until the real draw is entered.)
+  function assignThirds(qualGroups) {
+    const slots = THIRD_SLOTS.slice().sort((a, b) => a.id - b.id);
+    const assign = {}; const used = new Set();
+    (function bt(i) {
+      if (i === slots.length) return true;
+      for (const g of qualGroups) {
+        if (!used.has(g) && slots[i].groups.includes(g)) {
+          assign[slots[i].id] = g; used.add(g);
+          if (bt(i + 1)) return true;
+          used.delete(g); delete assign[slots[i].id];
+        }
+      }
+      return false;
+    })(0);
+    return assign;
+  }
+
+  function projectKnockouts() {
+    const tables = computeTables();
+    const pos = (g, i) => {
+      const row = tables[g] && tables[g][i];
+      return row ? { team: findTeam(row.team), row } : { team: null, row: null };
+    };
+    const thirds = 'ABCDEFGHIJKL'.split('').map((g) => {
+      const row = tables[g] && tables[g][2];
+      return row ? { g, team: findTeam(row.team), row } : null;
+    }).filter(Boolean);
+    thirds.sort((x, y) =>
+      y.row.points - x.row.points ||
+      y.row.goalDifference - x.row.goalDifference ||
+      y.row.goalsFor - x.row.goalsFor ||
+      x.g.localeCompare(y.g));
+    thirds.forEach((t, i) => { t.qualified = i < 8; });
+    const qualGroups = thirds.slice(0, 8).map((t) => t.g);
+    const qualSet = new Set(qualGroups);
+    const assign = assignThirds(qualGroups);
+
+    const label = (s, p) => s.t === 'W' ? '1' + s.g : s.t === 'R' ? '2' + s.g
+      : (assign[s.id] ? '3rd ' + assign[s.id] : '3rd');
+    const resolve = (s) => {
+      if (s.t === 'W') return { ...pos(s.g, 0), label: label(s) };
+      if (s.t === 'R') return { ...pos(s.g, 1), label: label(s) };
+      const g = assign[s.id];
+      return g ? { ...pos(g, 2), label: label(s) } : { team: null, row: null, label: '3rd' };
+    };
+    const r32 = R32_TEMPLATE.map((m) => ({ a: resolve(m.a), b: resolve(m.b) }));
+    const provisional = 'ABCDEFGHIJKL'.split('').some((g) =>
+      (tables[g] || []).some((r) => r.playedGames < 3));
+    return { r32, thirds, qualSet, tables, provisional };
+  }
+
+  function projSlot(s) {
+    const t = s && s.team;
+    const cls = t ? `slot-${t.owner}` : 'tbd';
+    return `<div class="bk-slot ${cls}">
+      <span class="bk-seed">${esc(s ? s.label : '')}</span>
+      <span class="flag">${t ? t.flagEmoji : ''}</span>
+      <span class="bk-name">${esc(t ? t.name : 'TBD')}</span>
+    </div>`;
+  }
+  function projCell(m) {
+    if (!m) return bracketMatch(null);
+    return `<div class="bk-match proj">${projSlot(m.a)}${projSlot(m.b)}</div>`;
+  }
+
+  function renderQualifiers(proj) {
+    const rows = 'ABCDEFGHIJKL'.split('').map((g) => {
+      const tb = proj.tables[g] || [];
+      const cell = (i, tag) => {
+        const r = tb[i], t = r && findTeam(r.team);
+        return t ? `<span class="ql in"><span class="owner-dot ${t.owner}"></span>${t.flagEmoji} ${esc(t.name)} <em>${tag}</em></span>` : '';
+      };
+      const r3 = tb[2], t3 = r3 && findTeam(r3.team), inSet = proj.qualSet.has(g);
+      const third = t3 ? `<span class="ql ${inSet ? 'in' : 'out'}"><span class="owner-dot ${t3.owner}"></span>${t3.flagEmoji} ${esc(t3.name)} <em>3rd ${inSet ? '✓' : '✗'}</em></span>` : '';
+      return `<div class="ql-row"><span class="ql-g">${g}</span>${cell(0, '1st')}${cell(1, '2nd')}${third}</div>`;
+    }).join('');
+    return `<div class="card"><span class="label">Projected to go through — top 2 + 3rd if it survives the cut</span><div class="ql-list">${rows}</div></div>`;
+  }
+
+  function renderThirdRace(proj) {
+    const rows = proj.thirds.map((t, i) => `<tr class="${t.qualified ? 'tq-in' : 'tq-out'} ${i === 8 ? 'tq-cut' : ''} ${t.team ? 'row-' + t.team.owner : ''}">
+      <td>${i + 1}</td>
+      <td class="tcol">${t.team ? t.team.flagEmoji + ' ' + esc(t.team.name) : '—'}<span class="tq-g">${t.g}</span></td>
+      <td>${t.row.playedGames}</td><td class="pts">${t.row.points}</td>
+      <td>${t.row.goalDifference > 0 ? '+' : ''}${t.row.goalDifference}</td>
+      <td>${t.qualified ? '<span class="tq-badge">IN</span>' : ''}</td>
+    </tr>`).join('');
+    return `<div class="card"><span class="label">Third-place race — best 8 of 12 advance</span>
+      <table class="group-table tq-table">
+        <thead><tr><th>#</th><th class="tcol">Team</th><th>P</th><th>Pts</th><th>GD</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  }
+
   // ---- BRACKET ----
   function renderBracket() {
     const byStage = {};
@@ -3073,20 +3224,33 @@ const RESULTS = [
     KO_ORDER.forEach((s) => byStage[s].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)));
 
     const counts = { LAST_32: 16, LAST_16: 8, QUARTER_FINALS: 4, SEMI_FINALS: 2, FINAL: 1 };
+    const hasRealKO = KO_ORDER.some((s) => byStage[s].some((m) => findTeam(m.homeTeam) || findTeam(m.awayTeam)));
+    const proj = hasRealKO ? null : projectKnockouts();
 
     const rounds = KO_ORDER.map((stage) => {
-      const ms = byStage[stage];
       const n = counts[stage];
       const cells = [];
-      for (let i = 0; i < n; i++) cells.push(bracketMatch(ms[i]));
+      for (let i = 0; i < n; i++) {
+        cells.push(stage === 'LAST_32' && proj ? projCell(proj.r32[i]) : bracketMatch(byStage[stage][i]));
+      }
       return `<div class="bracket-round">
         <h3>${STAGE_LABEL[stage]}</h3>
         ${cells.join('')}
       </div>`;
     }).join('');
 
+    const projHeader = proj ? `
+      <div class="card proj-banner">
+        <span class="display">Projected bracket</span>
+        <p>If the groups finished as they stand now${proj.provisional ? ' — but games are still being played, so this will shift' : ''}. The real Round of 32 locks in automatically once the group stage is complete.</p>
+      </div>
+      ${renderQualifiers(proj)}
+      ${renderThirdRace(proj)}
+      <h2 class="section-title">Projected Round of 32 →</h2>` : '';
+
     return `${apiNotice()}
       <h1 class="section-title">Road to the final</h1>
+      ${projHeader}
       <p class="label" style="margin-bottom:12px">Swipe across — Round of 32 to the Final</p>
       <div class="bracket-scroll"><div class="bracket">${rounds}</div></div>`;
   }
